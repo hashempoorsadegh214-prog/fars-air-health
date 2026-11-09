@@ -30,10 +30,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Validate ADS API Secret
+        env:
+          ADS_API_KEY: ${{ secrets.ADS_API_KEY }}
+        shell: bash
+        run: |
+          if [ -z "$ADS_API_KEY" ]; then
+            echo "::error::Secret ADS_API_KEY is missing or empty."
+            exit 1
+          fi
+
+          if [[ "$ADS_API_KEY" != *:* ]]; then
+            echo "::error::ADS_API_KEY must have the format UID:APIKEY."
+            exit 1
+          fi
+
+          UID_PART="${ADS_API_KEY%%:*}"
+          API_PART="${ADS_API_KEY#*:}"
+
+          if [ -z "$UID_PART" ] || [ -z "$API_PART" ]; then
+            echo "::error::ADS_API_KEY has an incomplete format."
+            exit 1
+          fi
+
+          echo "ADS API Secret format is valid."
+
       - name: Download and process CAMS data
         env:
           ADS_API_KEY: ${{ secrets.ADS_API_KEY }}
           REQUEST_DATE: ${{ inputs.request_date }}
+        shell: bash
         run: |
           if [ -n "$REQUEST_DATE" ]; then
             python scripts/process_cams.py --date "$REQUEST_DATE"
@@ -45,7 +71,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add data/
+
           if ! git diff --cached --quiet; then
             git commit -m "Update CAMS air quality data"
             git push
